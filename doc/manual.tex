@@ -1,0 +1,377 @@
+%% LyX 2.0.6 created this file.  For more info, see http://www.lyx.org/.
+%% Do not edit unless you really know what you are doing.
+\documentclass[oneside,english]{book}
+\usepackage[T1]{fontenc}
+\usepackage[latin9]{inputenc}
+\usepackage{listings}
+\setcounter{secnumdepth}{3}
+\setcounter{tocdepth}{3}
+\usepackage{textcomp}
+\usepackage{babel}
+\begin{document}
+
+\title{Animation Library}
+
+
+\author{©2013 Majenko Technologies}
+\maketitle
+\begin{quotation}
+The Animation library is a simple parallel processing script engine
+for manipulating large number of LEDs through a number of chained
+ULK devices.
+\end{quotation}
+
+\chapter{Animation Concepts}
+
+The Animation library runs a number of \textit{programs} in parallel,
+where each \textit{program} is a list of special instructions and
+their associated parameters. Instructions are executed in blocks separated
+by \textit{delay} instructions. When a \textit{delay} instruction
+is encountered the program is released and the next \textit{program}
+is executed. Each animation instance has its own context and no animation
+can affect another animation.
+
+\textit{Programs} are stored as arrays of 8-bit unsigned characters
+(typically \textit{uint8\_t}, \textit{byte} or \textit{unsigned char})
+and must be terminated by one of the \textit{terminating} instructions,
+such as LOOP or END.
+
+Simple counted repeats are supported, as well as infinite repeats
+with an external interrupt (known as a \textit{nudge}) to force loop
+termination.
+
+Operations can be grouped into three broad categories: \textit{control},
+\textit{LED} and \textit{flow}. \textit{Control} instructions perform
+such facilities as LED group definitions, \textit{LED} instructions
+directly manipulate the state of LEDs and groups of LEDs and \textit{flow}
+instructions define how the program proceeds.
+
+Each instruction is stored internally as an 8-bit unsigned value,
+or \textit{op-code}, and the library provides a number of symbolic
+names for these \textit{op-codes} to enable simpler and more readable
+programming.
+
+
+\chapter{Animation Instructions}
+
+
+\section{Control Instructions}
+
+
+\subsection{GROUP (op-code 1)}
+
+The GROUP command defines a new (or replaces an existing) LED group
+definition. A group of LEDs can all be manupilated together with LED
+instructions through the use of a group number instead of an LED number.
+
+The GROUP command takes a minimum of 3 parameters, but can take many
+more. The first parameter is the number of the group to define or
+redefine. Groups are numbered between 200 and 255 inclusive. The second
+parameter is the number of LEDs in the group. This is then followed
+by that number of parameters, one for each LED. For instance, to define
+group 200 with 3 LEDs (6, 7 and 8) in it, the command structure would
+be:
+
+\texttt{Animation::GROUP, 200, 3, 6, 7, 8}
+
+
+\section{LED Commands}
+
+
+\subsection{SET (op-code 2)}
+
+The set command is used to directly set the brightness of either a
+single LED or a group of LEDs defined with the GROUP command. The
+command takes 2 parameters - the number of the LED or GROUP to change,
+and the value to change it to. For instance, to set the LED number
+7 to 50\% brightness the command would be:
+
+\texttt{Animation::SET, 7, 128}
+
+Or to set the GROUP 200 to full brightness:
+
+\texttt{Animation::SET, 200, 255}
+
+
+\subsection{FADE (op-code 3)}
+
+The FADE command, like the SET command, changes the brightness of
+an LED or group of LEDs. Unlike the SET command, however, the change
+isn't immediate. Instead the LED or GROUP fades gradually between
+the current brightness and the desired target brightness. The rate
+of the change is specified as a delay in milliseconds between each
+step of brightness.
+
+The command takes 3 paramaters. The first is the number of the LED
+or GROUP to change. The second is the target brightness value (0-255)
+and the third is the number of milliseconds delay per step of the
+fade.
+
+Example - fade LED 4 up to full brightness with a delay of 10ms per
+step:
+
+\texttt{Animation::FADE, 4, 255, 10}
+
+
+\section{Flow Commands}
+
+
+\subsection{DELAY (op-code 4)}
+
+The DELAY command pauses the program for the specified number of milliseconds.
+The command takes two parameters, which are the high and low bytes
+of a 16-bit value, most significant byte first. For instance, a 1
+second delay, which is 1000 milliseconds, would be represented as
+the two bytes 3 and 232 (3 {*} 256 + 232 = 1000):
+
+\texttt{Animation::DELAY, 3, 232}
+
+A preprocessor macro PAIR is provided to perform this splitting for
+you:
+
+\texttt{Animation::DELAY, PAIR(1000)}
+
+
+\subsection{WAITEQ (op-code 5)}
+
+The WAITEQ command delays the program until any FADE instructions
+have finished processing (it stands for WAIT until EQual). It takes
+no parameters:
+
+\texttt{Animation::WAITEQ}
+
+
+\subsection{RDELAY (op-code 6)}
+
+The RDELAY command performs a random length delay. Like the DELAY
+command the delay is measured in milliseconds, and is provided as
+a pair of bytes representing a 16-bit value. Two values are provided
+as parameters representing the minimum and maximum delay times to
+use. Again, the PAIR macro can be used. For example, for a random
+delay between 100 and 1000 milliseconds:
+
+\texttt{Animation::RDELAY, PAIR(100), PAIR(1000)}
+
+
+\subsection{REPEAT (op-code 7)}
+
+This command repeats the following block of code, up to the first
+LOOP command found, a specified number of times, up to 255. Only one
+parameter is provided, which is the number of iterations to perform:
+
+\texttt{Animation::REPEAT, 10}
+
+\texttt{... code ...}
+
+\texttt{Animation::LOOP}
+
+
+\subsection{FOREVER (op-code 8)}
+
+FOREVER acts like the REPEAT command, however a number of iterations
+is not specified. The following block repeats indefinitely until a
+\textit{nudge} is sent to the animation at which point the loop finishes
+and the program continues:
+
+\texttt{Animation::FOREVER}
+
+\texttt{... code ...}
+
+\texttt{Animation::LOOP}
+
+
+\subsection{LOOP (op-code 254)}
+
+This is one of the instructions classed as a terminating instruction
+and as such is one of the few instructions which may be used as the
+final instruction of a program.
+
+The LOOP command returns the program either back to the previous REPEAT
+or FOREVER command (if one has been used) or to the start of the program.
+If a REPEAT or FOREVER has not been previously issued the LOOP will
+always loop the program regardless of any nudges:
+
+\texttt{Animation::LOOP}
+
+
+\subsection{END (op-code 255)}
+
+The END command terminates the program. Any LEDs affected by the program
+remain at their final settings until changed by another animation.
+The animation may be manually restarted by the user:
+
+\texttt{Animation::END\pagebreak{}}
+
+
+\section{Example Program}
+
+This small script will fade an RGB LED (the pins are defined by the
+preprocessor macros RGBR, RGBG adnd RGBB and should be provided by
+the calling program) to yellow, cause it to throb gently for a while,
+then fade it to blue and back to yellow. Extra line breaks have been
+added to aid readability:\\
+
+
+\texttt{}
+\begin{lstlisting}
+Animation::FADE, RGBR, 64, 10, 
+Animation::FADE, RGBG, 64, 10, 
+Animation::FADE, RGBB, 0, 10, 
+Animation::WAITEQ, 
+
+Animation::REPEAT, 50, 
+
+Animation::FADE, RGBR, 80, 10, 
+Animation::FADE, RGBG, 80, 10, 
+Animation::FADE, RGBB, 0, 10, 
+Animation::WAITEQ, 
+
+Animation::FADE, RGBR, 64, 10, 
+Animation::FADE, RGBG, 64, 10, 
+Animation::FADE, RGBB, 0, 10, 
+Animation::WAITEQ, 
+
+Animation::LOOP, 
+
+Animation::FADE, RGBR, 0, 10, 
+Animation::FADE, RGBG, 10, 10, 
+Animation::FADE, RGBB, 64, 10, 
+Animation::WAITEQ, 
+Animation::DELAY, PAIR(2000), 
+
+Animation::LOOP
+\end{lstlisting}
+
+
+
+\chapter{API}
+
+The API contains both static and instance-based operations for controlling
+animations.
+
+A new animation sequence is created by calling the static createAnimation()
+function and passing it a pointer to the program array. The animation
+is started by calling it's start() function, stopped by calling its
+stop() function, etc.
+
+All animation processing is performed by a repeated call to the static
+process() function.
+
+
+\section{Static Functions}
+
+
+\subsection{Animation {*}Animation::createAnimation({[}{[}const{]} uint8\_t {*}program{]});}
+
+This function creates a new Animation object, optionally assigns the
+program to it, and returns the new object to the user. The object
+is also internally added to the animation processing list.
+
+Animation {*}myAnimation = Animation::createAnimation(myProgram);
+
+
+\subsection{void Animation::process();}
+
+Iterate through the animation processing list and execute blocks of
+instructions up to a delay class instruction for each animation registered.
+This function needs to be called repeatedly (as fast as possible ideally)
+from loop().
+
+Animation::process();
+
+
+\subsection{void Animation::addAnimation(Animation {*}anim);}
+
+Add an animation constructed elsewhere to the internal processing
+list. Under normal circumstances this function should not be used;
+instead create the objects with the Animation::createAnimation() function.
+
+
+\section{Instance-based functions}
+
+
+\subsection{void setAnimation({[}const{]} uint8\_t {*}program);}
+
+Replace (or set) the program for the current animation. If the animation
+is running the new program is started from the beginning. Care should
+be taken using this function as any LEDs will retain the state they
+had at the time the program was replaced.
+
+myAnimation->setAnimation(myOtherProgram);
+
+
+\subsection{void start();}
+
+Begin animating the animation. The program wil run, from the beginning,
+either until it reaches an END instruction or the program is manually
+terminated with stop().
+
+myAnimation->start();
+
+
+\subsection{void stop();}
+
+Terminate a running animation. All LEDs retain their existing states.
+
+myAnimation->stop();
+
+
+\subsection{void nudge();}
+
+Indicate to a program in a FOREVER loop that it should leave the loop
+at the end of the current iteration.
+
+myAnimation->nudge();
+
+\pagebreak{}
+
+
+\section{Example Program}
+
+This small program executes the example animation from the previous
+chapter.
+
+\texttt{}
+\begin{lstlisting}
+#include <ULK.h>
+#include <Animation.h>
+
+#define RGBG 0
+#define RGBB 1
+#define RGBR 2
+
+const uint8_t newLEDs[] = {
+	Animation::FADE, RGBR, 64, 10,
+	Animation::FADE, RGBG, 64, 10,
+	Animation::FADE, RGBB, 0, 10,
+	Animation::WAITEQ,
+	Animation::REPEAT, 50,
+	Animation::FADE, RGBR, 80, 10,
+	Animation::FADE, RGBG, 80, 10,
+	Animation::FADE, RGBB, 0, 10,
+	Animation::WAITEQ,
+	Animation::FADE, RGBR, 64, 10,
+	Animation::FADE, RGBG, 64, 10,
+	Animation::FADE, RGBB, 0, 10,
+	Animation::WAITEQ,
+	Animation::LOOP,
+	Animation::FADE, RGBR, 0, 10,
+	Animation::FADE, RGBG, 10, 10,
+	Animation::FADE, RGBB, 64, 10,
+	Animation::WAITEQ,
+	Animation::DELAY, PAIR(2000),
+	Animation::LOOP
+};
+
+void setup() {
+	ULK.begin(1, 10);
+	Animation *anim1 = Animation::createAnimation(newLEDs);
+	anim1->start();
+}
+
+void loop() {
+	Animation::process();
+}
+\end{lstlisting}
+
+\end{document}

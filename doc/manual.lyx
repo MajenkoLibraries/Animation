@@ -1,0 +1,950 @@
+#LyX 2.0 created this file. For more info see http://www.lyx.org/
+\lyxformat 413
+\begin_document
+\begin_header
+\textclass book
+\use_default_options true
+\maintain_unincluded_children false
+\language english
+\language_package default
+\inputencoding auto
+\fontencoding global
+\font_roman default
+\font_sans default
+\font_typewriter default
+\font_default_family default
+\use_non_tex_fonts false
+\font_sc false
+\font_osf false
+\font_sf_scale 100
+\font_tt_scale 100
+
+\graphics default
+\default_output_format default
+\output_sync 0
+\bibtex_command default
+\index_command default
+\paperfontsize default
+\spacing single
+\use_hyperref false
+\papersize default
+\use_geometry false
+\use_amsmath 1
+\use_esint 1
+\use_mhchem 1
+\use_mathdots 1
+\cite_engine basic
+\use_bibtopic false
+\use_indices false
+\paperorientation portrait
+\suppress_date false
+\use_refstyle 1
+\index Index
+\shortcut idx
+\color #008000
+\end_index
+\secnumdepth 3
+\tocdepth 3
+\paragraph_separation indent
+\paragraph_indentation default
+\quotes_language english
+\papercolumns 1
+\papersides 1
+\paperpagestyle default
+\tracking_changes false
+\output_changes false
+\html_math_output 0
+\html_css_as_file 0
+\html_be_strict false
+\end_header
+
+\begin_body
+
+\begin_layout Title
+Animation Library
+\end_layout
+
+\begin_layout Author
+©2013 Majenko Technologies
+\end_layout
+
+\begin_layout Quotation
+The Animation library is a simple parallel processing script engine for
+ manipulating large number of LEDs through a number of chained ULK devices.
+\end_layout
+
+\begin_layout Chapter
+Animation Concepts
+\end_layout
+
+\begin_layout Standard
+The Animation library runs a number of 
+\shape italic
+programs
+\shape default
+ in parallel, where each 
+\shape italic
+program
+\shape default
+ is a list of special instructions and their associated parameters.
+ Instructions are executed in blocks separated by 
+\shape italic
+delay
+\shape default
+ instructions.
+ When a 
+\shape italic
+delay
+\shape default
+ instruction is encountered the program is released and the next 
+\shape italic
+program
+\shape default
+ is executed.
+ Each animation instance has its own context and no animation can affect
+ another animation.
+\end_layout
+
+\begin_layout Standard
+
+\shape italic
+Programs
+\shape default
+ are stored as arrays of 8-bit unsigned characters (typically 
+\shape italic
+uint8_t
+\shape default
+, 
+\shape italic
+byte
+\shape default
+ or 
+\shape italic
+unsigned char
+\shape default
+) and must be terminated by one of the 
+\shape italic
+terminating
+\shape default
+ instructions, such as LOOP or END.
+\end_layout
+
+\begin_layout Standard
+Simple counted repeats are supported, as well as infinite repeats with an
+ external interrupt (known as a 
+\shape italic
+nudge
+\shape default
+) to force loop termination.
+\end_layout
+
+\begin_layout Standard
+Operations can be grouped into three broad categories: 
+\shape italic
+control
+\shape default
+, 
+\shape italic
+LED
+\shape default
+ and 
+\shape italic
+flow
+\shape default
+.
+ 
+\shape italic
+Control
+\shape default
+ instructions perform such facilities as LED group definitions, 
+\shape italic
+LED
+\shape default
+ instructions directly manipulate the state of LEDs and groups of LEDs and
+ 
+\shape italic
+flow
+\shape default
+ instructions define how the program proceeds.
+\end_layout
+
+\begin_layout Standard
+Each instruction is stored internally as an 8-bit unsigned value, or 
+\shape italic
+op-code
+\shape default
+, and the library provides a number of symbolic names for these 
+\shape italic
+op-codes
+\shape default
+ to enable simpler and more readable programming.
+\end_layout
+
+\begin_layout Chapter
+Animation Instructions
+\end_layout
+
+\begin_layout Section
+Control Instructions
+\end_layout
+
+\begin_layout Subsection
+GROUP (op-code 1)
+\end_layout
+
+\begin_layout Standard
+The GROUP command defines a new (or replaces an existing) LED group definition.
+ A group of LEDs can all be manupilated together with LED instructions through
+ the use of a group number instead of an LED number.
+\end_layout
+
+\begin_layout Standard
+The GROUP command takes a minimum of 3 parameters, but can take many more.
+ The first parameter is the number of the group to define or redefine.
+ Groups are numbered between 200 and 255 inclusive.
+ The second parameter is the number of LEDs in the group.
+ This is then followed by that number of parameters, one for each LED.
+ For instance, to define group 200 with 3 LEDs (6, 7 and 8) in it, the command
+ structure would be:
+\end_layout
+
+\begin_layout Standard
+
+\family typewriter
+Animation::GROUP, 200, 3, 6, 7, 8
+\end_layout
+
+\begin_layout Section
+LED Commands
+\end_layout
+
+\begin_layout Subsection
+SET (op-code 2)
+\end_layout
+
+\begin_layout Standard
+The set command is used to directly set the brightness of either a single
+ LED or a group of LEDs defined with the GROUP command.
+ The command takes 2 parameters - the number of the LED or GROUP to change,
+ and the value to change it to.
+ For instance, to set the LED number 7 to 50% brightness the command would
+ be:
+\end_layout
+
+\begin_layout Standard
+
+\family typewriter
+Animation::SET, 7, 128
+\end_layout
+
+\begin_layout Standard
+Or to set the GROUP 200 to full brightness:
+\end_layout
+
+\begin_layout Standard
+
+\family typewriter
+Animation::SET, 200, 255
+\end_layout
+
+\begin_layout Subsection
+FADE (op-code 3)
+\end_layout
+
+\begin_layout Standard
+The FADE command, like the SET command, changes the brightness of an LED
+ or group of LEDs.
+ Unlike the SET command, however, the change isn't immediate.
+ Instead the LED or GROUP fades gradually between the current brightness
+ and the desired target brightness.
+ The rate of the change is specified as a delay in milliseconds between
+ each step of brightness.
+\end_layout
+
+\begin_layout Standard
+The command takes 3 paramaters.
+ The first is the number of the LED or GROUP to change.
+ The second is the target brightness value (0-255) and the third is the
+ number of milliseconds delay per step of the fade.
+\end_layout
+
+\begin_layout Standard
+Example - fade LED 4 up to full brightness with a delay of 10ms per step:
+\end_layout
+
+\begin_layout Standard
+
+\family typewriter
+Animation::FADE, 4, 255, 10
+\end_layout
+
+\begin_layout Section
+Flow Commands
+\end_layout
+
+\begin_layout Subsection
+DELAY (op-code 4)
+\end_layout
+
+\begin_layout Standard
+The DELAY command pauses the program for the specified number of milliseconds.
+ The command takes two parameters, which are the high and low bytes of a
+ 16-bit value, most significant byte first.
+ For instance, a 1 second delay, which is 1000 milliseconds, would be represente
+d as the two bytes 3 and 232 (3 * 256 + 232 = 1000):
+\end_layout
+
+\begin_layout Standard
+
+\family typewriter
+Animation::DELAY, 3, 232
+\end_layout
+
+\begin_layout Standard
+A preprocessor macro PAIR is provided to perform this splitting for you:
+\end_layout
+
+\begin_layout Standard
+
+\family typewriter
+Animation::DELAY, PAIR(1000)
+\end_layout
+
+\begin_layout Subsection
+WAITEQ (op-code 5)
+\end_layout
+
+\begin_layout Standard
+The WAITEQ command delays the program until any FADE instructions have finished
+ processing (it stands for WAIT until EQual).
+ It takes no parameters:
+\end_layout
+
+\begin_layout Standard
+
+\family typewriter
+Animation::WAITEQ
+\end_layout
+
+\begin_layout Subsection
+RDELAY (op-code 6)
+\end_layout
+
+\begin_layout Standard
+The RDELAY command performs a random length delay.
+ Like the DELAY command the delay is measured in milliseconds, and is provided
+ as a pair of bytes representing a 16-bit value.
+ Two values are provided as parameters representing the minimum and maximum
+ delay times to use.
+ Again, the PAIR macro can be used.
+ For example, for a random delay between 100 and 1000 milliseconds:
+\end_layout
+
+\begin_layout Standard
+
+\family typewriter
+Animation::RDELAY, PAIR(100), PAIR(1000)
+\end_layout
+
+\begin_layout Subsection
+REPEAT (op-code 7)
+\end_layout
+
+\begin_layout Standard
+This command repeats the following block of code, up to the first LOOP command
+ found, a specified number of times, up to 255.
+ Only one parameter is provided, which is the number of iterations to perform:
+\end_layout
+
+\begin_layout Standard
+
+\family typewriter
+Animation::REPEAT, 10
+\end_layout
+
+\begin_layout Standard
+
+\family typewriter
+...
+ code ...
+\end_layout
+
+\begin_layout Standard
+
+\family typewriter
+Animation::LOOP
+\end_layout
+
+\begin_layout Subsection
+FOREVER (op-code 8)
+\end_layout
+
+\begin_layout Standard
+FOREVER acts like the REPEAT command, however a number of iterations is
+ not specified.
+ The following block repeats indefinitely until a 
+\shape italic
+nudge
+\shape default
+ is sent to the animation at which point the loop finishes and the program
+ continues:
+\end_layout
+
+\begin_layout Standard
+
+\family typewriter
+Animation::FOREVER
+\end_layout
+
+\begin_layout Standard
+
+\family typewriter
+...
+ code ...
+\end_layout
+
+\begin_layout Standard
+
+\family typewriter
+Animation::LOOP
+\end_layout
+
+\begin_layout Subsection
+LOOP (op-code 254)
+\end_layout
+
+\begin_layout Standard
+This is one of the instructions classed as a terminating instruction and
+ as such is one of the few instructions which may be used as the final instructi
+on of a program.
+\end_layout
+
+\begin_layout Standard
+The LOOP command returns the program either back to the previous REPEAT
+ or FOREVER command (if one has been used) or to the start of the program.
+ If a REPEAT or FOREVER has not been previously issued the LOOP will always
+ loop the program regardless of any nudges:
+\end_layout
+
+\begin_layout Standard
+
+\family typewriter
+Animation::LOOP
+\end_layout
+
+\begin_layout Subsection
+END (op-code 255)
+\end_layout
+
+\begin_layout Standard
+The END command terminates the program.
+ Any LEDs affected by the program remain at their final settings until changed
+ by another animation.
+ The animation may be manually restarted by the user:
+\end_layout
+
+\begin_layout Standard
+
+\family typewriter
+Animation::END
+\begin_inset Newpage pagebreak
+\end_inset
+
+
+\end_layout
+
+\begin_layout Section
+Example Program
+\end_layout
+
+\begin_layout Standard
+This small script will fade an RGB LED (the pins are defined by the preprocessor
+ macros RGBR, RGBG adnd RGBB and should be provided by the calling program)
+ to yellow, cause it to throb gently for a while, then fade it to blue and
+ back to yellow.
+ Extra line breaks have been added to aid readability:
+\begin_inset Newline newline
+\end_inset
+
+
+\end_layout
+
+\begin_layout Standard
+
+\family typewriter
+\begin_inset listings
+inline false
+status open
+
+\begin_layout Plain Layout
+
+Animation::FADE, RGBR, 64, 10, 
+\end_layout
+
+\begin_layout Plain Layout
+
+Animation::FADE, RGBG, 64, 10, 
+\end_layout
+
+\begin_layout Plain Layout
+
+Animation::FADE, RGBB, 0, 10, 
+\end_layout
+
+\begin_layout Plain Layout
+
+Animation::WAITEQ, 
+\end_layout
+
+\begin_layout Plain Layout
+
+\end_layout
+
+\begin_layout Plain Layout
+
+Animation::REPEAT, 50, 
+\end_layout
+
+\begin_layout Plain Layout
+
+\end_layout
+
+\begin_layout Plain Layout
+
+Animation::FADE, RGBR, 80, 10, 
+\end_layout
+
+\begin_layout Plain Layout
+
+Animation::FADE, RGBG, 80, 10, 
+\end_layout
+
+\begin_layout Plain Layout
+
+Animation::FADE, RGBB, 0, 10, 
+\end_layout
+
+\begin_layout Plain Layout
+
+Animation::WAITEQ, 
+\end_layout
+
+\begin_layout Plain Layout
+
+\end_layout
+
+\begin_layout Plain Layout
+
+Animation::FADE, RGBR, 64, 10, 
+\end_layout
+
+\begin_layout Plain Layout
+
+Animation::FADE, RGBG, 64, 10, 
+\end_layout
+
+\begin_layout Plain Layout
+
+Animation::FADE, RGBB, 0, 10, 
+\end_layout
+
+\begin_layout Plain Layout
+
+Animation::WAITEQ, 
+\end_layout
+
+\begin_layout Plain Layout
+
+\end_layout
+
+\begin_layout Plain Layout
+
+Animation::LOOP, 
+\end_layout
+
+\begin_layout Plain Layout
+
+\end_layout
+
+\begin_layout Plain Layout
+
+Animation::FADE, RGBR, 0, 10, 
+\end_layout
+
+\begin_layout Plain Layout
+
+Animation::FADE, RGBG, 10, 10, 
+\end_layout
+
+\begin_layout Plain Layout
+
+Animation::FADE, RGBB, 64, 10, 
+\end_layout
+
+\begin_layout Plain Layout
+
+Animation::WAITEQ, 
+\end_layout
+
+\begin_layout Plain Layout
+
+Animation::DELAY, PAIR(2000), 
+\end_layout
+
+\begin_layout Plain Layout
+
+\end_layout
+
+\begin_layout Plain Layout
+
+Animation::LOOP
+\end_layout
+
+\end_inset
+
+
+\end_layout
+
+\begin_layout Chapter
+API
+\end_layout
+
+\begin_layout Standard
+The API contains both static and instance-based operations for controlling
+ animations.
+\end_layout
+
+\begin_layout Standard
+A new animation sequence is created by calling the static createAnimation()
+ function and passing it a pointer to the program array.
+ The animation is started by calling it's start() function, stopped by calling
+ its stop() function, etc.
+\end_layout
+
+\begin_layout Standard
+All animation processing is performed by a repeated call to the static process()
+ function.
+\end_layout
+
+\begin_layout Section
+Static Functions
+\end_layout
+
+\begin_layout Subsection
+Animation *Animation::createAnimation([[const] uint8_t *program]);
+\end_layout
+
+\begin_layout Standard
+This function creates a new Animation object, optionally assigns the program
+ to it, and returns the new object to the user.
+ The object is also internally added to the animation processing list.
+\end_layout
+
+\begin_layout Standard
+Animation *myAnimation = Animation::createAnimation(myProgram);
+\end_layout
+
+\begin_layout Subsection
+void Animation::process();
+\end_layout
+
+\begin_layout Standard
+Iterate through the animation processing list and execute blocks of instructions
+ up to a delay class instruction for each animation registered.
+ This function needs to be called repeatedly (as fast as possible ideally)
+ from loop().
+\end_layout
+
+\begin_layout Standard
+Animation::process();
+\end_layout
+
+\begin_layout Subsection
+void Animation::addAnimation(Animation *anim);
+\end_layout
+
+\begin_layout Standard
+Add an animation constructed elsewhere to the internal processing list.
+ Under normal circumstances this function should not be used; instead create
+ the objects with the Animation::createAnimation() function.
+\end_layout
+
+\begin_layout Section
+Instance-based functions
+\end_layout
+
+\begin_layout Subsection
+void setAnimation([const] uint8_t *program);
+\end_layout
+
+\begin_layout Standard
+Replace (or set) the program for the current animation.
+ If the animation is running the new program is started from the beginning.
+ Care should be taken using this function as any LEDs will retain the state
+ they had at the time the program was replaced.
+\end_layout
+
+\begin_layout Standard
+myAnimation->setAnimation(myOtherProgram);
+\end_layout
+
+\begin_layout Subsection
+void start();
+\end_layout
+
+\begin_layout Standard
+Begin animating the animation.
+ The program wil run, from the beginning, either until it reaches an END
+ instruction or the program is manually terminated with stop().
+\end_layout
+
+\begin_layout Standard
+myAnimation->start();
+\end_layout
+
+\begin_layout Subsection
+void stop();
+\end_layout
+
+\begin_layout Standard
+Terminate a running animation.
+ All LEDs retain their existing states.
+\end_layout
+
+\begin_layout Standard
+myAnimation->stop();
+\end_layout
+
+\begin_layout Subsection
+void nudge();
+\end_layout
+
+\begin_layout Standard
+Indicate to a program in a FOREVER loop that it should leave the loop at
+ the end of the current iteration.
+\end_layout
+
+\begin_layout Standard
+myAnimation->nudge();
+\end_layout
+
+\begin_layout Standard
+\begin_inset Newpage pagebreak
+\end_inset
+
+
+\end_layout
+
+\begin_layout Section
+Example Program
+\end_layout
+
+\begin_layout Standard
+This small program executes the example animation from the previous chapter.
+\end_layout
+
+\begin_layout Standard
+
+\family typewriter
+\begin_inset listings
+inline false
+status open
+
+\begin_layout Plain Layout
+
+#include <ULK.h>
+\end_layout
+
+\begin_layout Plain Layout
+
+#include <Animation.h>
+\end_layout
+
+\begin_layout Plain Layout
+
+\end_layout
+
+\begin_layout Plain Layout
+
+#define RGBG 0
+\end_layout
+
+\begin_layout Plain Layout
+
+#define RGBB 1
+\end_layout
+
+\begin_layout Plain Layout
+
+#define RGBR 2
+\end_layout
+
+\begin_layout Plain Layout
+
+\end_layout
+
+\begin_layout Plain Layout
+
+const uint8_t newLEDs[] = {
+\end_layout
+
+\begin_layout Plain Layout
+
+	Animation::FADE, RGBR, 64, 10,
+\end_layout
+
+\begin_layout Plain Layout
+
+	Animation::FADE, RGBG, 64, 10,
+\end_layout
+
+\begin_layout Plain Layout
+
+	Animation::FADE, RGBB, 0, 10,
+\end_layout
+
+\begin_layout Plain Layout
+
+	Animation::WAITEQ,
+\end_layout
+
+\begin_layout Plain Layout
+
+	Animation::REPEAT, 50,
+\end_layout
+
+\begin_layout Plain Layout
+
+	Animation::FADE, RGBR, 80, 10,
+\end_layout
+
+\begin_layout Plain Layout
+
+	Animation::FADE, RGBG, 80, 10,
+\end_layout
+
+\begin_layout Plain Layout
+
+	Animation::FADE, RGBB, 0, 10,
+\end_layout
+
+\begin_layout Plain Layout
+
+	Animation::WAITEQ,
+\end_layout
+
+\begin_layout Plain Layout
+
+	Animation::FADE, RGBR, 64, 10,
+\end_layout
+
+\begin_layout Plain Layout
+
+	Animation::FADE, RGBG, 64, 10,
+\end_layout
+
+\begin_layout Plain Layout
+
+	Animation::FADE, RGBB, 0, 10,
+\end_layout
+
+\begin_layout Plain Layout
+
+	Animation::WAITEQ,
+\end_layout
+
+\begin_layout Plain Layout
+
+	Animation::LOOP,
+\end_layout
+
+\begin_layout Plain Layout
+
+	Animation::FADE, RGBR, 0, 10,
+\end_layout
+
+\begin_layout Plain Layout
+
+	Animation::FADE, RGBG, 10, 10,
+\end_layout
+
+\begin_layout Plain Layout
+
+	Animation::FADE, RGBB, 64, 10,
+\end_layout
+
+\begin_layout Plain Layout
+
+	Animation::WAITEQ,
+\end_layout
+
+\begin_layout Plain Layout
+
+	Animation::DELAY, PAIR(2000),
+\end_layout
+
+\begin_layout Plain Layout
+
+	Animation::LOOP
+\end_layout
+
+\begin_layout Plain Layout
+
+};
+\end_layout
+
+\begin_layout Plain Layout
+
+\end_layout
+
+\begin_layout Plain Layout
+
+void setup() {
+\end_layout
+
+\begin_layout Plain Layout
+
+	ULK.begin(1, 10);
+\end_layout
+
+\begin_layout Plain Layout
+
+	Animation *anim1 = Animation::createAnimation(newLEDs);
+\end_layout
+
+\begin_layout Plain Layout
+
+	anim1->start();
+\end_layout
+
+\begin_layout Plain Layout
+
+}
+\end_layout
+
+\begin_layout Plain Layout
+
+\end_layout
+
+\begin_layout Plain Layout
+
+void loop() {
+\end_layout
+
+\begin_layout Plain Layout
+
+	Animation::process();
+\end_layout
+
+\begin_layout Plain Layout
+
+}
+\end_layout
+
+\end_inset
+
+
+\end_layout
+
+\end_body
+\end_document
