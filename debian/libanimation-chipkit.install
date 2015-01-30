@@ -1,0 +1,10 @@
+Animation.cpp libraries/Display/chipkit/Animation/
+Animation.h libraries/Display/chipkit/Animation/
+LICENSE usr/share/doc/libanimation-chipkit/
+README.md usr/share/doc/libanimation-chipkit/
+doc/manual.tex libraries/Display/chipkit/Animation/doc
+doc/manual.pdf libraries/Display/chipkit/Animation/doc
+doc/manual.lyx libraries/Display/chipkit/Animation/doc
+doc/manual.dvi libraries/Display/chipkit/Animation/doc
+doc/manual.aux libraries/Display/chipkit/Animation/doc
+doc/manual.ps libraries/Display/chipkit/Animation/doc
