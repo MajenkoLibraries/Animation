@@ -37,9 +37,6 @@ I2S *Animation::_i2s = NULL;
 PCM1774 *Animation::_dac = NULL;
 TPA2016 *Animation::_amp = NULL;
 
-extern void __DEBUG(uint8_t v);
-extern void __DEBUG_ADD(uint32_t v);
-
 Animation::Animation() {
     for (int i = 0; i < 4; i++) { _sound[i] = -1; }
 }
@@ -103,6 +100,16 @@ bool Animation::execute() {
             _libus->send(address, command, &_prog[_pc], qty);
             _pc += qty;
             break;
+
+        case SOUND_SAMPLERATE: {
+            uint32_t rate = _prog[_pc++];
+            rate |= _prog[_pc++] << 8;
+            rate |= _prog[_pc++] << 16;
+            rate |= _prog[_pc++] << 24;
+            _i2s->end();
+            _i2s->setSampleRate(rate);
+            _i2s->begin();
+        };
 
         case PLAY_STEREO: {
             value = _prog[_pc++] & 0x03;

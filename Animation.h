@@ -97,6 +97,7 @@ class Animation {
         const static uint8_t SOUND_MID          = 0x34;
         const static uint8_t SOUND_TREBLE       = 0x35;
         const static uint8_t SOUND_3D           = 0x36;
+        const static uint8_t SOUND_SAMPLERATE   = 0x37;
 
         // Flow control
         const static uint8_t DELAY              = 0xf0;
