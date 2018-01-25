@@ -32,30 +32,23 @@
 #ifndef _ANIMATION_H
 #define _ANIMATION_H
 
-#if (ARDUINO >= 100) 
-# include <Arduino.h>
-#else
-# include <WProgram.h>
-#endif
-
-#include <ULK.h>
+#include <Arduino.h>
+#include <LIBus.h>
+#include <PCM1774.h>
+#include <TPA2016.h>
+#include <I2S.h>
+#include <DFATFS.h>
 
 class Animation;
 
-#define PAIR(X) (X) >> 8, (X) & 0xFF
+#define U16(X) (X) & 0xFF, (X) >> 8
+#define U24(X) (X) & 0xFF, (X) >> 8, (X) >> 16
+#define U32(X) (X) & 0xFF, (X) >> 8, (X) >> 16, (X)  >> 24
 
 typedef struct _AnimationList {
     Animation *anim;
     struct _AnimationList *next;
 } AnimationList;
-
-typedef struct _Fade {
-    uint8_t group;
-    uint8_t target;
-    uint32_t start;
-    uint8_t delay;
-    struct _Fade *next;
-} Fade;
 
 class Animation {
     private:
@@ -64,53 +57,73 @@ class Animation {
 
         static AnimationList *_list;
 
-        Fade *_fade;
-        uint8_t *_prog;
+        const uint8_t *_prog;
         uint32_t _pc;
-        uint8_t *_groups[56];
         uint8_t _state;
         uint32_t _delayStart;
         uint32_t _delay;
         uint32_t _repeatPC;
         uint32_t _repeatCount;
-        boolean _forever;
+        bool _forever;
+        static LIBusMaster *_libus;
+        static I2S *_i2s;
+        static PCM1774 *_dac;
+        static TPA2016 *_amp;
 
-        void execute();
-        void addFade(Fade *f);
-        void delFade(Fade *f);
-        void processFades();
+        DFILE _soundfile[4];
+        int _sound[4];
+
 
         const static uint8_t sSTOP = 0;
         const static uint8_t sRUN = 1;
         const static uint8_t sDELAY = 2;
-        const static uint8_t sWAIT = 3;
 
     public:
-        const static uint8_t GROUP = 1;
-        const static uint8_t SET = 2;
-        const static uint8_t FADE = 3;
-        const static uint8_t DELAY = 4;
-        const static uint8_t WAITEQ = 5;
-        const static uint8_t RDELAY = 6;
-        const static uint8_t REPEAT = 7;
-        const static uint8_t FOREVER = 8;
+        // LIBus control
+        const static uint8_t SEND               = 0x11;
 
-        const static uint8_t LOOP = 254;
-        const static uint8_t END = 255;
+        // Sound (playback)
+        const static uint8_t PLAY_MONO_LEFT     = 0x20;
+        const static uint8_t PLAY_MONO_RIGHT    = 0x21;
+        const static uint8_t PLAY_MONO_BOTH     = 0x22;
+        const static uint8_t PLAY_STEREO        = 0x23;
+        const static uint8_t PLAY_STOP          = 0x24;
+   
+        // Sound (control)
+        const static uint8_t SOUND_VOLUME       = 0x30;
+        const static uint8_t SOUND_DGAIN        = 0x31;
+        const static uint8_t SOUND_AGAIN        = 0x32;
+        const static uint8_t SOUND_BASS         = 0x33;
+        const static uint8_t SOUND_MID          = 0x34;
+        const static uint8_t SOUND_TREBLE       = 0x35;
+        const static uint8_t SOUND_3D           = 0x36;
+
+        // Flow control
+        const static uint8_t DELAY              = 0xf0;
+        const static uint8_t RDELAY             = 0xf1;
+        const static uint8_t REPEAT             = 0xf2;
+        const static uint8_t FOREVER            = 0xf3;
+        const static uint8_t LOOP               = 0xf4;
+        const static uint8_t END                = 0xFF;
 
         // Public functions and variables.  These can be accessed from
         // outside the class.
         Animation();
-        void run();
-        void setAnimation(uint8_t *prog);
+        Animation(const uint8_t *program);
+        bool execute();
+        void setAnimation(const uint8_t *prog);
         void start();
         void stop();
         void nudge();
 
         static void process();
         static Animation *createAnimation();
-        static Animation *createAnimation(uint8_t *program);
         static Animation *createAnimation(const uint8_t *program);
         static void addAnimation(Animation *anim);
+
+        static void setLIBus(LIBusMaster &m) { _libus = &m; }
+        static void setI2S(I2S &m) { _i2s = &m; }
+        static void setDAC(PCM1774 &m) { _dac = &m; }
+        static void setAMP(TPA2016 &m) { _amp = &m; }
 };
 #endif

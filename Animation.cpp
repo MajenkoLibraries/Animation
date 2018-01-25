@@ -32,57 +32,59 @@
 #include <Animation.h>
 
 AnimationList *Animation::_list = NULL;
+LIBusMaster *Animation::_libus = NULL;
+I2S *Animation::_i2s = NULL;
+PCM1774 *Animation::_dac = NULL;
+TPA2016 *Animation::_amp = NULL;
+
+extern void __DEBUG(uint8_t v);
+extern void __DEBUG_ADD(uint32_t v);
 
 Animation::Animation() {
+    for (int i = 0; i < 4; i++) { _sound[i] = -1; }
+}
+
+Animation::Animation(const uint8_t *prog) {
+    for (int i = 0; i < 4; i++) { _sound[i] = -1; }
+    setAnimation(prog);
 }
 
 Animation *Animation::createAnimation() {
     return createAnimation((uint8_t *)NULL);
 }
 
-Animation *Animation::createAnimation(uint8_t *prog) {
+Animation *Animation::createAnimation(const uint8_t *prog) {
     Animation *anim = new Animation();
-    anim->_fade = NULL;
     anim->setAnimation(prog);
     addAnimation(anim);
     return(anim);
 }
 
-Animation *Animation::createAnimation(const uint8_t *prog) {
-    return createAnimation((uint8_t *)prog);
-}
-
-void Animation::execute() {
-    uint8_t group;
-    uint8_t qty;
+bool Animation::execute() {
     uint8_t value;
     uint8_t value2;
     uint8_t hb, lb;
     uint8_t speed;
-    Fade *fade;
+
+    uint32_t address;
+    uint8_t command;
+    uint8_t qty;
 
     uint32_t now = millis();
 
+    char filename[128];
+
     if (_prog == NULL) {
-        return;
+        return false;
     }
 
     if (_state == sSTOP) {
-        return;
+        return false;
     }
-
-    processFades();
 
     if (_state == sDELAY) {
         if (now - _delayStart < _delay) {
-            return;
-        }
-        _state = sRUN;
-    }
-
-    if (_state == sWAIT) {
-        if (_fade != NULL) {
-            return;
+            return true;
         }
         _state = sRUN;
     }
@@ -90,99 +92,204 @@ void Animation::execute() {
     uint8_t instruction = _prog[_pc++];
 
     switch (instruction) {
-        case GROUP:
-            group = _prog[_pc++];
+        case SEND: // Send bytes to a LIBus device
+            address = _prog[_pc++];
+            address |= _prog[_pc++] << 8;
+            address |= _prog[_pc++] << 16;
+
+            command = _prog[_pc++];
             qty = _prog[_pc++];
-
-
-            // Groups are between 200 and 255.  If a number less than
-            // 56 is provided, assume it is + 200.
-            if (group <= 55) {
-                group += 200;
-            }
-
-            // Any other group numbers are an error.  Break here.  Who
-            // knows what will happen now?
-            if (group < 200) {
-                break;
-                _state = sRUN;
-            }
-
-            group = group - 200;
-
-            // Delete the old group, if there is one and it's not big enough.
-            if (_groups[group] != NULL) {
-                if (_groups[group][0] < qty) {
-                    free(_groups[group]);
-                    _groups[group] = (uint8_t *)malloc(qty + 1);
-                }
-            } else {
-                _groups[group] = (uint8_t *)malloc(qty + 1);
-            }
-
-            _groups[group][0] = qty;
-
-            // Fill the group from the animation.
-            for (int i = 0; i < qty; i++) {
-                _groups[group][i+1] = _prog[_pc++];
-            }
-
-            _state = sRUN;
             
+            _libus->send(address, command, &_prog[_pc], qty);
+            _pc += qty;
             break;
-        case SET:
-            group = _prog[_pc++];
-            value = _prog[_pc++];
 
-            if (group < 200) {
-                ULK.analogWrite(group, value);
-            } else {
-                if (_groups[group - 200] == NULL) {
-                    break;
-                    _state = sRUN;
+        case PLAY_STEREO: {
+            value = _prog[_pc++] & 0x03;
+            value2 = _prog[_pc++];
+
+
+            int i = 0;
+            char c;
+            do {
+                c = _prog[_pc++];
+                filename[i++] = c;
+
+            } while ((i < 128) && (c != 0));
+            if (_sound[value] >= 0) {
+                if (_i2s->isPlaying(_sound[value])) {
+                    _i2s->stop(_sound[value]);
                 }
-                for (int i = 0; i < _groups[group - 200][0]; i++) {
-                    ULK.analogWrite(_groups[group - 200][i+1], value);
+                _sound[value] = -1;
+                if (_soundfile[value]) {
+                    _soundfile[value].fsclose();
                 }
             }
-        
-            _state = sRUN;
-            break;
-        case FADE:
-            group = _prog[_pc++];
+
+            FRESULT fr = _soundfile[value].fsopen(filename, FA_READ);
+            if (fr == FR_OK) {
+                _soundfile[value].fslseek(44);
+                _i2s->playStereo(_soundfile[value], (float)value2 / 100.0, 1.0, 44);
+            }
+        }
+        break;
+
+        case PLAY_MONO_LEFT: {
+            value = _prog[_pc++] & 0x03;
+            value2 = _prog[_pc++];
+
+
+            int i = 0;
+            char c;
+            do {
+                c = _prog[_pc++];
+                filename[i++] = c;
+
+            } while ((i < 128) && (c != 0));
+            if (_sound[value] >= 0) {
+                if (_i2s->isPlaying(_sound[value])) {
+                    _i2s->stop(_sound[value]);
+                }
+                _sound[value] = -1;
+                if (_soundfile[value]) {
+                    _soundfile[value].fsclose();
+                }
+            }
+
+            FRESULT fr = _soundfile[value].fsopen(filename, FA_READ);
+            if (fr == FR_OK) {
+                _soundfile[value].fslseek(44);
+                _i2s->playMonoLeft(_soundfile[value], (float)value2 / 100.0, 1.0, 44);
+            }
+        }
+        break;
+
+        case PLAY_MONO_RIGHT: {
+            value = _prog[_pc++] & 0x03;
+            value2 = _prog[_pc++];
+
+
+            int i = 0;
+            char c;
+            do {
+                c = _prog[_pc++];
+                filename[i++] = c;
+
+            } while ((i < 128) && (c != 0));
+            if (_sound[value] >= 0) {
+                if (_i2s->isPlaying(_sound[value])) {
+                    _i2s->stop(_sound[value]);
+                }
+                _sound[value] = -1;
+                if (_soundfile[value]) {
+                    _soundfile[value].fsclose();
+                }
+            }
+
+            FRESULT fr = _soundfile[value].fsopen(filename, FA_READ);
+            if (fr == FR_OK) {
+                _soundfile[value].fslseek(44);
+                _i2s->playMonoRight(_soundfile[value], (float)value2 / 100.0, 1.0, 44);
+            }
+        }
+        break;
+
+        case PLAY_MONO_BOTH: {
+            value = _prog[_pc++] & 0x03;
+            value2 = _prog[_pc++];
+
+
+            int i = 0;
+            char c;
+            do {
+                c = _prog[_pc++];
+                filename[i++] = c;
+
+            } while ((i < 128) && (c != 0));
+            if (_sound[value] >= 0) {
+                if (_i2s->isPlaying(_sound[value])) {
+                    _i2s->stop(_sound[value]);
+                }
+                _sound[value] = -1;
+                if (_soundfile[value]) {
+                    _soundfile[value].fsclose();
+                }
+            }
+
+            FRESULT fr = _soundfile[value].fsopen(filename, FA_READ);
+            if (fr == FR_OK) {
+                _soundfile[value].fslseek(44);
+                _i2s->playMono(_soundfile[value], (float)value2 / 100.0, 1.0, 44);
+            }
+        }
+        break;
+
+        case PLAY_STOP: {
+            value = _prog[_pc++] & 0x03;
+            if (_sound[value] >= 0) {
+                if (_i2s->isPlaying(_sound[value])) {
+                    _i2s->stop(_sound[value]);
+                }
+                _sound[value] = -1;
+                if (_soundfile[value]) {
+                    _soundfile[value].fsclose();
+                }
+            }
+        }
+        break;
+
+        case SOUND_VOLUME:
             value = _prog[_pc++];
-            speed = _prog[_pc++];
-            _state = sRUN;
-            fade = (Fade *)malloc(sizeof(Fade));
-            fade->group = group;
-            fade->start = now;
-            fade->delay = speed;
-            fade->target = value;
-            fade->next = NULL;
-            addFade(fade);
+            value2 = _prog[_pc++];
+            _dac->setVolume(value, value2);
             break;
+        case SOUND_DGAIN:
+            _dac->setGain(_prog[_pc++]);
+            break;
+        case SOUND_AGAIN:
+            _amp->setGain(_prog[_pc++]);
+            break;
+        case SOUND_BASS:
+            _dac->setBass(0 - _prog[_pc++]);
+            break;
+        case SOUND_MID:
+            _dac->setMid(0 - _prog[_pc++]);
+            break;
+        case SOUND_TREBLE:
+            _dac->setTreble(0 - _prog[_pc++]);
+            break;
+        case SOUND_3D:
+            value = _prog[_pc++];
+            value2 = _prog[_pc++];
+            switch (value) {
+                case 0: _dac->disable3D(); break;
+                case 1: _dac->enable3D(); _dac->setNarrow3D(); break;
+                case 2: _dac->enable3D(); _dac->setWide3D(); break;
+            }
+            _dac->set3DDepth(value2);
+            break;
+
+
+
         case DELAY:
-            hb = _prog[_pc++];
             lb = _prog[_pc++];
+            hb = _prog[_pc++];
             _delay = (hb << 8) | lb;
             _delayStart = now;
             _state = sDELAY;
             break;
         case RDELAY:
-            hb = _prog[_pc++];
             lb = _prog[_pc++];
+            hb = _prog[_pc++];
             value = (hb << 8) | lb;
 
-            hb = _prog[_pc++];
             lb = _prog[_pc++];
+            hb = _prog[_pc++];
             value2 = (hb << 8) | lb;
 
             _delay = random(value, value2);
             _delayStart = now;
             _state = sDELAY;
-            break;
-        case WAITEQ:
-            _state = sWAIT;
             break;
         case REPEAT:
             _repeatCount = _prog[_pc++];
@@ -218,11 +325,13 @@ void Animation::execute() {
         case END:
             _pc = 0;
             _state = sSTOP;
+            return false;
             break;
     }
+    return true;
 }
 
-void Animation::setAnimation(uint8_t *anim) {
+void Animation::setAnimation(const uint8_t *anim) {
     _repeatCount = 0;
     _repeatPC = 0;
     _pc = 0;
@@ -261,83 +370,6 @@ void Animation::process() {
     }
     for (scan = _list; scan; scan = scan->next) {
         scan->anim->execute();
-    }
-}
-
-void Animation::addFade(Fade *f) {
-    Fade *scan;
-    if (_fade == NULL) {
-        _fade = f;
-        return;
-    }
-
-    for (scan = _fade; scan->next; scan = scan->next);
-    scan->next = f;
-}
-
-void Animation::delFade(Fade *f) {
-    Fade *scan;
-    if (_fade == f) {
-        _fade = _fade->next;
-        free(f);
-        return;
-    }
-
-    for (scan = _fade; scan; scan = scan->next) {
-        if (scan->next == f) {
-            scan->next = scan->next->next;
-            free(f);
-            return;
-        }
-    }
-}
-
-void Animation::processFades() {
-    Fade *scan;
-    uint32_t now = millis();
-
-    for (scan = _fade; scan; scan = scan->next) {
-        if (now - scan->start >= scan->delay) {
-            scan->start = now;
-            if (scan->group < 200) {
-                uint8_t current = ULK.get(scan->group);
-                if (current == scan->target) {
-                    delFade(scan);
-                    scan = _fade;
-                    return;
-                }
-                if (current < scan->target) {
-                    ULK.analogWrite(scan->group, current + 1);
-                } else {
-                    ULK.analogWrite(scan->group, current - 1);
-                }
-            } else {
-                uint8_t group = scan->group - 200;
-                uint8_t eq = 1;
-                if (_groups[group] != NULL) {
-                    for (int i = 0; i < _groups[group][0]; i++) {
-                        uint8_t pin = _groups[group][i + 1];
-                        uint8_t current = ULK.get(_groups[group][i + 1]);
-                        if (current == scan->target) {
-                            continue;
-                        }
-                        if (current < scan->target) {
-                            ULK.analogWrite(_groups[group][i + 1], current + 1);
-                            eq = 0;
-                        } else {
-                            ULK.analogWrite(_groups[group][i + 1], current - 1);
-                            eq = 0;
-                        }
-                    }
-                }
-                if (eq == 1) {
-                    delFade(scan);
-                    return;
-                    scan = _fade;
-                    continue;
-                }
-            }
-        }
     }
 }
 
